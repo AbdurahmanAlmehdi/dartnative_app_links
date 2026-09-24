@@ -1,0 +1,40 @@
+name: app_links_kit
+description: >-
+  Incoming links for DartNative apps: iOS Universal Links and custom URL
+  schemes, Android App Links and deep links, with the app_links API.
+version: 0.1.0
+homepage: https://github.com/AbdurahmanAlmehdi/dartnative_app_links
+repository: https://github.com/AbdurahmanAlmehdi/dartnative_app_links
+issue_tracker: https://github.com/AbdurahmanAlmehdi/dartnative_app_links/issues
+topics:
+  - dartnative
+  - deeplink
+  - app-links
+  - universal-links
+
+environment:
+  sdk: ^3.9.0
+
+dependencies:
+  ffi: ^2.1.0
+  meta: ^1.15.0
+
+dev_dependencies:
+  lints: ^6.0.0
+  test: ^1.25.0
+
+# Read by `dn pub get`: links the pod (iOS) and the Gradle module (Android),
+# then emits the import + loadSymbols() call into the app's registrant.
+dartnative:
+  plugin:
+    platforms:
+      ios:
+        ffiPlugin: true
+      android:
+        package: com.dartnative.applinks
+        pluginClass: DartNativeAppLinksPlugin
+  registrant:
+    imports:
+      - package:app_links_kit/app_links_kit.dart
+    calls:
+      - AppLinksFFIBindings.loadSymbols();
