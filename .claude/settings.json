@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dn pub get:*)",
+      "Bash(dn analyze:*)",
+      "Bash(dn test:*)",
+      "Bash(dn plugin build:*)"
+    ],
+    "deny": [
+      "Bash(dn publish:*)",
+      "Bash(flutter:*)"
+    ]
+  }
+}

@@ -1,7 +1,7 @@
 # app_links_kit — design
 
-Status: design only, no package code yet. Researched 2026-09-25 for Daftar port
-ticket P3-B2.
+Status: implemented as 0.1.0 (2026-09-25). Researched 2026-09-25 for Daftar
+port ticket P3-B2. Implementation decisions are recorded in §11.
 
 ---
 
@@ -266,10 +266,10 @@ returns `["https://daftaar.ly/app/claim?code=X"]` and the stream emits it.
   on the device skips the CDN.
 - **No Swift changes.** If `AppLinksKitAutoHook = NO`, add the three
   forwarding calls from §3 instead.
-- If the app's own `SceneDelegate` overrides `scene(_:openURLContexts:)` or
-  `scene(_:continue:)`, it **must call `super`**. Otherwise the injected base
-  implementation never runs. This is already true of `willConnectTo`, because
-  `super` starts the runtime.
+- If the app's own `SceneDelegate` implements `scene(_:openURLContexts:)` or
+  `scene(_:continue:)`, the pod wraps those implementations too (see §11,
+  "Decided: hook the manifest delegate class"). An override of
+  `willConnectTo` must still call `super`, because `super` starts the runtime.
 
 ### 4.2 Android
 
@@ -514,7 +514,7 @@ android {
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = '17' }
     sourceSets { main.java.srcDirs += 'src/main/kotlin' }
-    defaultConfig { minSdkVersion 26 }
+    defaultConfig { minSdkVersion 24 }   // see §11
     externalNativeBuild { cmake { path "CMakeLists.txt"; version "3.22.1" } }
 }
 
@@ -738,3 +738,73 @@ intro. See §10 for which URL that can actually be.
    Flutter-side equivalent they need a release (a version-name bump plus
    `release_notes.txt`), not a Shorebird patch, per the project `CLAUDE.md`.
    The same applies to whichever build first carries this plugin.
+
+## 11. Decisions made during implementation
+
+Nobody was available to answer the open questions while this was built, so
+these were decided and recorded here.
+
+- **Decided: hook the manifest delegate class too (iOS).** A Swift override of
+  a non-`dynamic` `@objc` method calls `super` directly, not through
+  `objc_msgSend`, so a base-class hook alone misses an app `SceneDelegate` that
+  overrides `willConnectTo`. The Swift compiler also rejects `super` for
+  `openURLContexts` / `continue`, because the base class does not declare them.
+  So `+load` also reads `UIApplicationSceneManifest` →
+  `UISceneDelegateClassName`, and wraps any of the three selectors that the
+  class implements *itself*. A per-payload guard (a weak reference to the last
+  `options` / `NSSet` / `NSUserActivity`) stops a double capture when both
+  hooks run.
+- **Decided: no `initialDelivered` flag.** `pending` is the only replay
+  source. A link received while Dart is not listening (the cold-start link
+  included) enters `pending`, and the first `StartListening` drains it once.
+  After a hot restart `pending` is already empty, so the cold link is not
+  replayed, while `getInitialLink()` still returns it.
+- **Decided: a failed fire re-queues.** If the check before a fire fails
+  (slot 0 or generation moved, or `listening` went false between queueing
+  and firing), the link goes back to `pending` instead of being dropped.
+  Links that arrive during a hot restart therefore reach the new session.
+- **Decided: Android state takes one lock.** JNI calls (Dart thread) and
+  intents (main thread) share `AppLinksKit`'s state, so every entry point
+  synchronises. Fires still post to the main `Handler`.
+- **Decided: UTF-8 byte arrays both ways on Android.** The getters and
+  `StartListening` return `ByteArray`s, which C++ copies into `malloc`'d,
+  NUL-terminated buffers that Dart frees. Delivery passes a `ByteArray` as
+  well. No `GetStringUTFChars` anywhere.
+- **Decided: `JNI_OnLoad` never fails the load.** A missing class or method
+  is logged, and the `DNAppLinks*` exports then return NULL or no-op. This
+  matches the no-op matrix instead of throwing `UnsatisfiedLinkError`.
+- **Decided: the FFI backend loads lazily.** `AppLinks()` built before
+  `registerAll()` still works, because every backend call runs the idempotent
+  `loadSymbols()` first. `loadSymbols()` catches lookup failures (logged to
+  stderr), so a missing `.so` degrades to nulls and a silent stream.
+- **Decided: Android `minSdkVersion 24`, not 26.** DartNative's app template
+  defaults to minSdk 24, so a 26 library fails the manifest merge in every
+  stock app. The plugin uses no API above 24.
+- **Decided: `NoopAppLinksBackend` stays internal.** The package exports only
+  `AppLinks`, `AppLinksBackend` and `AppLinksFFIBindings`.
+- **Decided: `AppLinksKit.handle(url:)` (Swift) is public too.** It lets an app
+  with its own URL source feed the stream. The ObjC names are
+  `handleURLContexts:`, `handleUserActivity:` and `handleURL:`.
+- **Decided: the example uses the custom scheme only.** There is no demo
+  https host: Universal Links and App Links cannot be verified without a
+  served AASA or assetlinks.json anyway.
+- **Decided (§10.4): `compileOnly project(':dartnative_android')` works.** The
+  plugin loader exposes the prebuilt `.aar` as that Gradle project. Verified
+  by the example's Android build.
+- **Deferred to the Daftar integration (§10.1, 10.2, 10.6, 10.7, 10.8):** the
+  `/app/claim` path, the bundle and package identity, the OTP link, the router
+  changes and shipping as a release are app decisions. The lead owns them.
+- **Framework gap found:** on the iOS 26.0 simulator runtime (23A5276e),
+  an `AppBar` over a `SingleChildScrollView` aborts in DartNative's
+  `_dnEnsureBarScrollEdgeEffect`, with
+  `-[UIScrollEdgeElementContainerInteraction setScrollView:]: unrecognized
+  selector`. It needs a `respondsToSelector:` guard upstream. The example
+  avoids a scroll view.
+- **Verified (2026-09-25).** iOS 26.0 simulator, debug build: a cold start
+  from `applinkskit://claim?code=COLD1` shows COLD1 as the initial link and
+  as the first stream event, and a warm `WARM2` arrives on the stream. iOS 26
+  asks "Open in …?" before handing a custom scheme to the app. Android 16
+  emulator (Pixel Tablet AVD), release APK: the same cold and warm results,
+  with COLD1 delivered once, so the sticky replay is de-duplicated. Universal
+  Links and App Links still need a served AASA or assetlinks.json, so they are
+  unverified.
