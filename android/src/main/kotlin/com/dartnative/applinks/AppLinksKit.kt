@@ -7,7 +7,6 @@ import android.content.Intent
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import com.dartnative.runtime.DNActivityEvents
 import org.json.JSONArray
 import java.lang.ref.WeakReference
 
@@ -45,7 +44,12 @@ object AppLinksKit {
         }
         try {
             // Replays the sticky intent, so the order against onCreate is moot.
-            DNActivityEvents.addIntentListener { handleIntent(it) }
+            // Reflection: a compile-time dependency on dartnative_android
+            // needs the framework checkout, which `dn publish` can't find.
+            val listener: (Intent) -> Unit = { handleIntent(it) }
+            Class.forName("com.dartnative.runtime.DNActivityEvents")
+                .getMethod("addIntentListener", Function1::class.java)
+                .invoke(null, listener)
         } catch (e: Throwable) {
             Log.e(TAG, "DNActivityEvents unavailable; call AppLinksKit.handleIntent: $e")
         }

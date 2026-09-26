@@ -519,7 +519,6 @@ android {
 }
 
 dependencies {
-    compileOnly project(':dartnative_android')   // DNActivityEvents; the app provides it (§4e, §10 A4)
     implementation 'androidx.core:core-ktx:1.12.0'
 }
 ```
@@ -788,9 +787,11 @@ these were decided and recorded here.
 - **Decided: the example uses the custom scheme only.** There is no demo
   https host: Universal Links and App Links cannot be verified without a
   served AASA or assetlinks.json anyway.
-- **Decided (§10.4): `compileOnly project(':dartnative_android')` works.** The
-  plugin loader exposes the prebuilt `.aar` as that Gradle project. Verified
-  by the example's Android build.
+- **Decided (§10.4): `DNActivityEvents` is called by reflection.**
+  `compileOnly project(':dartnative_android')` builds inside an app, but
+  `dn publish` resolves that project only through a `dartnative*` path
+  dependency, which a published package can't have. The framework's consumer
+  rules keep `com.dartnative.**`, so the lookup survives R8.
 - **Deferred to the Daftar integration (§10.1, 10.2, 10.6, 10.7, 10.8):** the
   `/app/claim` path, the bundle and package identity, the OTP link, the router
   changes and shipping as a release are app decisions. The lead owns them.

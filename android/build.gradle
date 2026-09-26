@@ -45,8 +45,3 @@ android {
         }
     }
 }
-
-dependencies {
-    // DNActivityEvents; the app already ships dartnative_android.
-    compileOnly project(':dartnative_android')
-}
