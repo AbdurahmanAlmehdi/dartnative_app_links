@@ -776,9 +776,10 @@ these were decided and recorded here.
   `registerAll()` still works, because every backend call runs the idempotent
   `loadSymbols()` first. `loadSymbols()` catches lookup failures (logged to
   stderr), so a missing `.so` degrades to nulls and a silent stream.
-- **Decided: Android `minSdkVersion 24`, not 26.** DartNative's app template
-  defaults to minSdk 24, so a 26 library fails the manifest merge in every
-  stock app. The plugin uses no API above 24.
+- **Decided: Android `minSdkVersion 24`, not 26.** The plugin uses no API
+  above 24, so apps on 24 or 25 can use it. (It was also needed when the app
+  template defaulted to 24; since DartNative/dartnative#50 the template
+  defaults to 26, which merges with it fine.)
 - **Decided: `NoopAppLinksBackend` stays internal.** The package exports only
   `AppLinks`, `AppLinksBackend` and `AppLinksFFIBindings`.
 - **Decided: `AppLinksKit.handle(url:)` (Swift) is public too.** It lets an app
